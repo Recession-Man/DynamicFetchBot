@@ -1,10 +1,37 @@
-Yes, you can customize the search input using data from your .env file and retrieve specific information related to a token swap, such as the pool address, authority, source, and destination accounts, using the SPL Token Swap method. Below, I'll guide you on how to implement this.
+Solana Trading Bot Enhancement - Dynamic Pool Fetching and Swap Execution
+Overview
+This repository enhances an existing Solana trading bot by adding dynamic pool fetching and swap execution using the SPL Token Swap method. The implementation leverages environment variables to fetch necessary on-chain data dynamically and perform token swaps based on the specified token mint addresses.
 
-1. Setup: Load Environment Variables
-First, make sure to load your environment variables from the .env file to get the contract address (which we'll assume is the address of the token you want to swap with SOL).
+Features
+Dynamic Pool Fetching: Automatically fetches liquidity pool data based on token mint addresses provided in environment variables.
+Token Swap Execution: Executes swaps between SOL and a specified SPL token using real-time on-chain data.
+Environment Configuration: Easily configurable via .env file to adjust token mints, RPC endpoints, slippage, and other parameters.
+Requirements
+Node.js: Ensure you have Node.js installed on your system.
+Solana Dependencies: The bot uses the following npm packages:
+@solana/web3.js
+@solana/spl-token
+@solana/spl-token-swap
+dotenv
+Installation
+Clone the repository to your local machine:
 
-2. Fetching Pool Data Using SPL Token Swap Method
-We will create a function to fetch pool data based on the contract address of the token you want to swap with SOL.
+bash
+Copy code
+git clone <your-repo-url>
+cd <your-repo-directory>
+Install the necessary dependencies:
 
-3. Querying and Retrieving Specific Data
-You will query the Solana blockchain using the SPL Token Swap method and retrieve specific data required for performing the swap.
+bash
+Copy code
+npm install
+Create a .env file in the root directory with the following content:
+
+ini
+Copy code
+RPC_ENDPOINT=https://api.mainnet-beta.solana.com
+TOKEN_MINT_ADDRESS=YourTokenMintAddressHere
+Replace YourTokenMintAddressHere with the actual token mint address of the token you want to swap with SOL.
+
+Implementation Details
+The bot is designed to dynamically fetch pool data using the SPL Token Swap method based on the token mint address specified in the .env file. This data is then used to perform token swaps between SOL and the specified SPL token.
