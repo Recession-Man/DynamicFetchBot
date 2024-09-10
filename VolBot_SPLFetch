@@ -1,0 +1,103 @@
+require('dotenv').config();
+const { Connection, PublicKey, Transaction, sendAndConfirmTransaction } = require('@solana/web3.js');
+const { TokenSwap } = require('@solana/spl-token-swap');
+const splToken = require('@solana/spl-token');
+
+const connection = new Connection(process.env.RPC_ENDPOINT, 'confirmed');
+const TOKEN_MINT_ADDRESS = new PublicKey(process.env.TOKEN_MINT_ADDRESS);
+
+async function createTokenAccountIfNotExist(connection, wallet, mint) {
+    const tokenAccount = await splToken.getAssociatedTokenAddress(
+        mint,
+        wallet.publicKey,
+        true,
+        splToken.TOKEN_PROGRAM_ID,
+        splToken.ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+
+    const accountInfo = await connection.getAccountInfo(tokenAccount);
+    if (!accountInfo) {
+        const transaction = new Transaction().add(
+            splToken.createAssociatedTokenAccountInstruction(
+                wallet.publicKey,
+                tokenAccount,
+                wallet.publicKey,
+                mint,
+                splToken.TOKEN_PROGRAM_ID,
+                splToken.ASSOCIATED_TOKEN_PROGRAM_ID
+            )
+        );
+
+        await sendAndConfirmTransaction(connection, transaction, [wallet]);
+        console.log(`Created token account for mint: ${mint.toString()} at ${tokenAccount.toString()}`);
+    } else {
+        console.log(`Token account already exists at ${tokenAccount.toString()} for mint: ${mint.toString()}`);
+    }
+    return tokenAccount;
+}
+
+async function getPoolData(connection, tokenMintAddress) {
+    const programId = new PublicKey('SPL_Token_Swap_Program_ID_Here'); // Replace with the actual SPL Token Swap Program ID
+
+    const pools = await connection.getProgramAccounts(programId, {
+        filters: [
+            { dataSize: 324 }, // Typical size for a token swap pool account
+            { memcmp: { offset: 0, bytes: tokenMintAddress.toBase58() } }, // First token (SOL or other)
+        ],
+    });
+
+    if (pools.length === 0) {
+        throw new Error('No matching pool found for the given token mint');
+    }
+
+    const poolAddress = pools[0].pubkey;
+    const poolAccount = await connection.getAccountInfo(poolAddress);
+    const poolData = TokenSwap.decode(poolAccount.data);
+
+    return {
+        poolAddress,
+        authority: poolData.authority,
+        poolSource: poolData.tokenAccountA,
+        poolDestination: poolData.tokenAccountB,
+        poolFeeAccount: poolData.poolFeeAccount,
+    };
+}
+
+async function performSwap({ connection, wallet, sourceMint, destinationMint, amount, slippage }) {
+    const { poolAddress, authority, poolSource, poolDestination, poolFeeAccount } = await getPoolData(connection, destinationMint);
+
+    const transaction = new Transaction().add(
+        TokenSwap.swapInstruction(
+            {
+                tokenSwap: poolAddress,
+                authority: authority,
+                userTransferAuthority: wallet.publicKey,
+                source: await createTokenAccountIfNotExist(connection, wallet, sourceMint),
+                destination: await createTokenAccountIfNotExist(connection, wallet, destinationMint),
+                poolSource: poolSource,
+                poolDestination: poolDestination,
+                poolFeeAccount: poolFeeAccount,
+                tokenProgramId: splToken.TOKEN_PROGRAM_ID,
+                amountIn: amount,
+                minimumAmountOut: Math.floor(amount * (1 - slippage / 100)), // Apply slippage
+            },
+            programId // Replace with the actual Token Swap Program ID
+        )
+    );
+
+    try {
+        const signature = await sendAndConfirmTransaction(connection, transaction, [wallet]);
+        console.log(`Swap executed successfully: ${signature}`);
+    } catch (error) {
+        console.error(`Swap failed: ${error}`);
+    }
+}
+
+// Example usage
+const wallet = /* Initialize your wallet */;
+const sourceMint = new PublicKey('So11111111111111111111111111111111111111112'); // SOL mint
+const destinationMint = TOKEN_MINT_ADDRESS;
+const amount = 1e9; // 1 SOL in lamports
+const slippage = 1.0; // 1% slippage
+
+performSwap({ connection, wallet, sourceMint, destinationMint, amount, slippage });
